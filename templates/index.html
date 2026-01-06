@@ -3,35 +3,52 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>五目並べオンライン</title>
+    <title>五目並べ Online (v2.0)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <style>
-        body { font-family: sans-serif; text-align: center; background: #f0f0f0; margin: 0; padding: 10px; }
-        .hidden { display: none; }
+        body { font-family: "Helvetica Neue", Arial, sans-serif; text-align: center; background: #f4f6f9; margin: 0; padding: 10px; color: #333; }
+        .hidden { display: none !important; }
         
         .container { 
-            max-width: 600px; margin: 0 auto; background: white; padding: 20px; 
-            border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); box-sizing: border-box; width: 100%;
+            max-width: 600px; margin: 0 auto; background: white; padding: 30px 20px; 
+            border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); box-sizing: border-box; width: 100%;
         }
 
-        input { padding: 12px; margin: 5px 0; width: 100%; box-sizing: border-box; font-size: 16px; }
+        h1 { color: #2c3e50; margin-bottom: 20px; }
+        h2 { color: #34495e; font-size: 1.2rem; margin-top: 0; }
+
+        input { 
+            padding: 12px 15px; margin: 8px 0; width: 100%; box-sizing: border-box; font-size: 16px; 
+            border: 1px solid #ddd; border-radius: 6px; transition: border 0.3s;
+        }
+        input:focus { border-color: #007bff; outline: none; }
         
         button { 
-            padding: 12px 20px; margin: 10px 5px; cursor: pointer; 
-            background: #007bff; color: white; border: none; border-radius: 4px; font-size: 16px;
+            padding: 12px 24px; margin: 10px 5px; cursor: pointer; 
+            background: #007bff; color: white; border: none; border-radius: 6px; font-size: 16px;
+            font-weight: bold; transition: background 0.2s, transform 0.1s;
         }
         button:hover { background: #0056b3; }
+        button:active { transform: translateY(1px); }
         
         button.secondary { background: #6c757d; }
         button.secondary:hover { background: #5a6268; }
 
         button.spectate { background: #28a745; }
         button.spectate:hover { background: #218838; }
+
+        a { color: #007bff; text-decoration: none; }
+        a:hover { text-decoration: underline; }
         
         ul { list-style: none; padding: 0; }
-        li { padding: 15px 10px; border-bottom: 1px solid #ccc; display: flex; justify-content: space-between; align-items: center; }
+        li { 
+            padding: 15px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; 
+            background: #fff; transition: background 0.2s;
+        }
+        li:last-child { border-bottom: none; }
+        li:hover { background: #fafafa; }
         
-        /* Responsive Board */
+        /* Board */
         #board { 
             display: grid; 
             grid-template-columns: repeat(15, 1fr); 
@@ -40,38 +57,65 @@
             margin: 20px auto; 
             width: 100%; max-width: 500px; 
             aspect-ratio: 1 / 1; 
-            border: 5px solid #8B4513; box-sizing: border-box;
+            border: 4px solid #8B4513; box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            box-sizing: border-box;
         }
         
         .cell { width: 100%; height: 100%; position: relative; cursor: pointer; }
-        
-        .cell::before { 
-            content: ''; position: absolute; top: 50%; left: 0; width: 100%; height: 1px; background: #000; transform: translateY(-50%);
-        }
-        .cell::after { 
-            content: ''; position: absolute; left: 50%; top: 0; height: 100%; width: 1px; background: #000; transform: translateX(-50%);
-        }
+        .cell::before { content: ''; position: absolute; top: 50%; left: 0; width: 100%; height: 1px; background: #5d4037; transform: translateY(-50%); }
+        .cell::after { content: ''; position: absolute; left: 50%; top: 0; height: 100%; width: 1px; background: #5d4037; transform: translateX(-50%); }
         
         .stone { 
-            width: 80%; height: 80%; border-radius: 50%; z-index: 2; position: absolute; top: 10%; left: 10%;
+            width: 80%; height: 80%; border-radius: 50%; z-index: 2; position: absolute; top: 10%; left: 10%; 
+            box-shadow: 2px 2px 4px rgba(0,0,0,0.4);
         }
-        .black { background: black; box-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
-        .white { background: white; box-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
+        .black { 
+            background: radial-gradient(circle at 30% 30%, #555, #000); 
+        }
+        .white { 
+            background: radial-gradient(circle at 30% 30%, #fff, #ddd); 
+        }
 
-        #turn-indicator { font-size: 1.1em; font-weight: bold; margin: 10px 0; padding: 10px; background: #eee; border-radius: 5px; }
-        .my-turn { color: #0056b3; background: #e7f1ff !important; border: 2px solid #0056b3; }
-        .opponent-turn { color: #555; }
-        .spectator-view { color: #28a745; background: #d4edda !important; border: 2px solid #28a745; }
+        #turn-indicator { font-size: 1.1em; font-weight: bold; margin: 15px 0; padding: 12px; border-radius: 8px; background: #eee; }
+        .my-turn { color: #0056b3; background: #e7f1ff !important; border: 2px solid #b3d7ff; }
+        .opponent-turn { color: #666; background: #f8f9fa !important; border: 2px solid #ddd; }
+        .spectator-view { color: #155724; background: #d4edda !important; border: 2px solid #c3e6cb; }
 
-        .table-wrapper { overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; min-width: 300px; font-size: 0.9em; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
-        th { background-color: #f2f2f2; white-space: nowrap; }
+        .table-wrapper { overflow-x: auto; margin-top: 15px; border-radius: 8px; border: 1px solid #ddd; }
+        table { width: 100%; border-collapse: collapse; min-width: 300px; font-size: 0.9em; }
+        th, td { padding: 12px 15px; text-align: center; border-bottom: 1px solid #ddd; }
+        th { background-color: #f8f9fa; font-weight: bold; color: #555; white-space: nowrap; }
+        tr:last-child td { border-bottom: none; }
+
+        /* Custom Modal CSS */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.5); z-index: 9999;
+            display: flex; justify-content: center; align-items: center;
+            opacity: 0; visibility: hidden; transition: opacity 0.3s, visibility 0.3s;
+        }
+        .modal-overlay.active { opacity: 1; visibility: visible; }
+        
+        .modal-box {
+            background: white; padding: 30px; border-radius: 12px;
+            width: 90%; max-width: 400px; text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transform: translateY(20px); transition: transform 0.3s;
+        }
+        .modal-overlay.active .modal-box { transform: translateY(0); }
+        
+        .modal-title { font-size: 1.25rem; margin-bottom: 15px; font-weight: bold; color: #333; }
+        .modal-message { margin-bottom: 25px; color: #666; line-height: 1.5; }
+        
+        .modal-actions { display: flex; justify-content: center; gap: 10px; }
+        .modal-btn { min-width: 100px; }
+        .btn-cancel { background: #e9ecef; color: #333; }
+        .btn-cancel:hover { background: #dde2e6; }
 
         @media (max-width: 480px) {
-            .container { padding: 10px; }
+            .container { padding: 20px 15px; }
             h1 { font-size: 1.5em; }
-            th, td { padding: 4px; font-size: 0.8em; }
+            th, td { padding: 8px 5px; font-size: 0.8em; }
         }
     </style>
 </head>
@@ -83,26 +127,28 @@
     <div id="auth-screen">
         <div id="login-form">
             <h2>ログイン</h2>
-            <input type="text" id="l_username" placeholder="ID">
-            <input type="password" id="l_password" placeholder="Password">
+            <input type="text" id="l_username" placeholder="ユーザーID">
+            <input type="password" id="l_password" placeholder="パスワード">
             <button onclick="login()">ログイン</button>
-            <p>アカウントがありませんか？ <a href="#" onclick="toggleAuth()">登録へ</a></p>
+            <p style="font-size: 0.9em; margin-top: 15px;">アカウントがありませんか？ <a href="#" onclick="toggleAuth()">登録へ</a></p>
         </div>
         <div id="register-form" class="hidden">
             <h2>ユーザー登録</h2>
-            <input type="text" id="r_username" placeholder="ID (Unique)">
-            <input type="password" id="r_password" placeholder="Password">
-            <input type="text" id="r_nickname" placeholder="Nickname">
+            <input type="text" id="r_username" placeholder="希望ID (半角英数)">
+            <input type="password" id="r_password" placeholder="パスワード">
+            <input type="text" id="r_nickname" placeholder="表示名 (ニックネーム)">
             <button onclick="register()">登録</button>
-            <p>既にアカウントをお持ちですか？ <a href="#" onclick="toggleAuth()">ログインへ</a></p>
+            <p style="font-size: 0.9em; margin-top: 15px;">既にアカウントをお持ちですか？ <a href="#" onclick="toggleAuth()">ログインへ</a></p>
         </div>
     </div>
 
     <div id="lobby-screen" class="hidden">
         <h2>ロビー</h2>
-        <p>ログイン中: <span id="my-nickname">{{ current_user.nickname if current_user.is_authenticated else '' }}</span></p>
+        <div style="margin-bottom: 20px; font-size: 0.95em; color: #555;">
+            ログイン中: <strong id="my-nickname" style="color: #007bff; font-size: 1.1em;">{{ current_user.nickname if current_user.is_authenticated else '' }}</strong>
+        </div>
         <button class="secondary" onclick="showHistory()">対戦履歴を見る</button>
-        <h3>オンラインユーザー</h3>
+        <h3 style="margin-top: 30px; border-bottom: 2px solid #eee; padding-bottom: 10px;">オンラインユーザー</h3>
         <ul id="user-list"></ul>
     </div>
 
@@ -127,12 +173,21 @@
 
     <div id="game-screen" class="hidden">
         <h2 id="game-title">対戦中</h2>
-        <p>対戦: <span id="game-info"></span></p>
+        <p style="color: #666; margin-bottom: 5px;">対戦相手: <strong id="game-info"></strong></p>
         
         <div id="turn-indicator">ゲーム準備中...</div>
         
         <div id="board"></div>
-        <button onclick="backToLobby()">ロビーに戻る</button>
+        <button class="secondary" onclick="backToLobby()" style="margin-top: 20px;">ロビーに戻る</button>
+    </div>
+</div>
+
+<div id="custom-modal" class="modal-overlay">
+    <div class="modal-box">
+        <div id="modal-title" class="modal-title">通知</div>
+        <div id="modal-message" class="modal-message">メッセージ</div>
+        <div id="modal-actions" class="modal-actions">
+            </div>
     </div>
 </div>
 
@@ -141,8 +196,64 @@
     
     let socket;
     let currentRoom = null;
-    let myRoleColor = null; // 1: Black, 2: White, null: Spectator
-    let isSpectator = false; // 観戦モードフラグ
+    let myRoleColor = null; 
+    let isSpectator = false;
+
+    // --- Modal Functions ---
+    const modal = document.getElementById('custom-modal');
+    const modalTitle = document.getElementById('modal-title');
+    const modalMessage = document.getElementById('modal-message');
+    const modalActions = document.getElementById('modal-actions');
+
+    function showModal(message, title = "通知", callback = null) {
+        modalTitle.textContent = title;
+        modalMessage.innerHTML = message.replace(/\n/g, '<br>');
+        modalActions.innerHTML = '';
+
+        const okBtn = document.createElement('button');
+        okBtn.textContent = 'OK';
+        okBtn.className = 'modal-btn';
+        okBtn.onclick = () => {
+            closeModal();
+            if (callback) callback();
+        };
+        modalActions.appendChild(okBtn);
+
+        modal.classList.add('active');
+    }
+
+    function showConfirm(message, title = "確認", yesCallback, noCallback) {
+        modalTitle.textContent = title;
+        modalMessage.innerHTML = message.replace(/\n/g, '<br>');
+        modalActions.innerHTML = '';
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.textContent = 'キャンセル';
+        cancelBtn.className = 'modal-btn btn-cancel';
+        cancelBtn.onclick = () => {
+            closeModal();
+            if (noCallback) noCallback();
+        };
+
+        const okBtn = document.createElement('button');
+        okBtn.textContent = 'OK';
+        okBtn.className = 'modal-btn';
+        okBtn.onclick = () => {
+            closeModal();
+            if (yesCallback) yesCallback();
+        };
+
+        modalActions.appendChild(cancelBtn);
+        modalActions.appendChild(okBtn);
+
+        modal.classList.add('active');
+    }
+
+    function closeModal() {
+        modal.classList.remove('active');
+    }
+
+    // --- Main Logic ---
 
     if (currentUserId !== null) {
         initSocket();
@@ -157,26 +268,33 @@
         const u = document.getElementById('r_username').value;
         const p = document.getElementById('r_password').value;
         const n = document.getElementById('r_nickname').value;
+        if(!u || !p || !n) {
+            showModal("全ての項目を入力してください。", "入力エラー");
+            return;
+        }
         const res = await fetch('/register', {
             method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'},
             body: `username=${u}&password=${p}&nickname=${n}`
         });
         if(res.ok) location.reload();
-        else alert('登録失敗: IDが重複している可能性があります');
+        else showModal('登録失敗: IDが重複している可能性があります', "エラー");
     }
 
     async function login() {
         const u = document.getElementById('l_username').value;
         const p = document.getElementById('l_password').value;
+        if(!u || !p) {
+            showModal("IDとパスワードを入力してください。", "入力エラー");
+            return;
+        }
         const res = await fetch('/login', {
             method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'},
             body: `username=${u}&password=${p}`
         });
         if(res.ok) location.reload();
-        else alert('ログイン失敗');
+        else showModal('ログインに失敗しました。\nIDまたはパスワードを確認してください。', "エラー");
     }
 
-    // --- History Functions ---
     async function showHistory() {
         const res = await fetch('/api/history');
         if(res.ok) {
@@ -205,7 +323,6 @@
         document.getElementById('lobby-screen').classList.remove('hidden');
     }
 
-    // --- Socket Logic ---
     function initSocket() {
         socket = io();
         
@@ -214,61 +331,101 @@
             document.getElementById('lobby-screen').classList.remove('hidden');
         });
 
-        // 【修正】ユーザーリスト更新：対戦中なら「観戦」ボタンを表示
+        socket.on('reconnect_game', (data) => {
+            closeModal();
+            currentRoom = data.room_id;
+            isSpectator = false;
+            
+            showGameScreen();
+            
+            document.getElementById('game-title').innerText = "対戦中 (再接続)";
+            document.getElementById('game-info').innerText = `${data.opponent}`;
+            
+            initBoard();
+            const board = data.board;
+            for(let r=0; r<15; r++){
+                for(let c=0; c<15; c++){
+                    if(board[r][c] !== 0) drawStone(r, c, board[r][c]);
+                }
+            }
+            
+            myRoleColor = (data.role === 'black') ? 1 : 2;
+            
+            let nextTurnColor;
+            if (data.current_turn === currentUserId) {
+                nextTurnColor = myRoleColor; 
+            } else {
+                nextTurnColor = (myRoleColor === 1) ? 2 : 1; 
+            }
+            updateTurn(nextTurnColor);
+        });
+
         socket.on('update_user_list', (users) => {
             const list = document.getElementById('user-list');
             list.innerHTML = '';
+            
+            if(users.length === 0) {
+                list.innerHTML = '<li style="justify-content:center; color:#888;">オンラインユーザーはいません</li>';
+            }
+
             users.forEach(u => {
                 const li = document.createElement('li');
                 
-                // 名前部分の生成
                 const nameSpan = document.createElement('span');
                 nameSpan.textContent = u.nickname;
-                if (u.id === currentUserId) nameSpan.textContent += " (あなた)";
+                if (u.id === currentUserId) {
+                    nameSpan.textContent += " (あなた)";
+                    nameSpan.style.fontWeight = "bold";
+                }
                 li.appendChild(nameSpan);
 
-                // ボタン部分の生成
                 if (u.id !== currentUserId) {
                     if (u.status === 'playing') {
-                        // 対戦中なら観戦ボタン
                         const btn = document.createElement('button');
                         btn.textContent = '観戦する';
-                        btn.className = 'spectate'; // 緑色のボタン
+                        btn.className = 'spectate'; 
                         btn.onclick = () => socket.emit('join_spectate', {room_id: u.room_id});
                         li.appendChild(btn);
                     } else {
-                        // 待機中なら対戦申込ボタン
                         const btn = document.createElement('button');
                         btn.textContent = '対戦申込';
-                        btn.onclick = () => socket.emit('challenge_request', {target_id: u.id});
+                        btn.onclick = () => {
+                            showConfirm(
+                                `${u.nickname} さんに対戦を申し込みますか？`, 
+                                "対戦申込", 
+                                () => socket.emit('challenge_request', {target_id: u.id})
+                            );
+                        };
                         li.appendChild(btn);
                     }
-                } else if (u.status === 'playing') {
-                     // 自分が対戦中と判定されている場合の表示（再接続時など）
-                     const statusSpan = document.createElement('span');
-                     statusSpan.textContent = ' [対戦中]';
-                     statusSpan.style.color = 'red';
-                     li.appendChild(statusSpan);
+                } else {
+                    if (u.status === 'playing') {
+                        const statusSpan = document.createElement('span');
+                        statusSpan.textContent = ' [対戦中]';
+                        statusSpan.style.color = '#d9534f';
+                        statusSpan.style.fontWeight = 'bold';
+                        li.appendChild(statusSpan);
+                    }
                 }
-                
                 list.appendChild(li);
             });
         });
 
         socket.on('receive_challenge', (data) => {
-            if(confirm(`${data.challenger_name} から対戦申し込みが届きました。受けますか？`)) {
-                socket.emit('challenge_response', {accepted: true, challenger_id: data.challenger_id});
-            } else {
-                socket.emit('challenge_response', {accepted: false, challenger_id: data.challenger_id});
-            }
+            showConfirm(
+                `${data.challenger_name} から対戦申し込みが届きました。\n受けますか？`,
+                "対戦要求",
+                () => socket.emit('challenge_response', {accepted: true, challenger_id: data.challenger_id}), 
+                () => socket.emit('challenge_response', {accepted: false, challenger_id: data.challenger_id})
+            );
         });
         
         socket.on('challenge_declined', (data) => {
-            alert(data.msg);
+            showModal(data.msg, "断られました");
         });
 
-        // 通常の対戦開始
         socket.on('game_start', (data) => {
+            closeModal();
             currentRoom = data.room_id;
             isSpectator = false;
             socket.emit('join_game_room', {room_id: currentRoom});
@@ -276,17 +433,17 @@
             showGameScreen();
             
             document.getElementById('game-title').innerText = "対戦中";
-            document.getElementById('game-info').innerText = `VS ${data.opponent}`;
+            document.getElementById('game-info').innerText = `${data.opponent}`;
             
             initBoard();
             myRoleColor = (data.role === 'black') ? 1 : 2;
             updateTurn(1); 
         });
 
-        // 【追加】観戦開始イベント
         socket.on('spectate_start', (data) => {
+            closeModal();
             currentRoom = data.room_id;
-            isSpectator = true; // 観戦モードON
+            isSpectator = true; 
             myRoleColor = null;
 
             showGameScreen();
@@ -294,7 +451,6 @@
             document.getElementById('game-title').innerText = "観戦モード";
             document.getElementById('game-info').innerText = `${data.black_name} (黒) VS ${data.white_name} (白)`;
             
-            // 盤面の再現
             initBoard();
             const board = data.board;
             for(let r=0; r<15; r++){
@@ -313,17 +469,25 @@
 
         socket.on('game_over', (data) => {
             let msg;
+            let title = "ゲーム終了";
+            
             if (isSpectator) {
-                // 観戦者向けのメッセージ (IDから名前解決はしていないため簡易表示)
                 msg = "勝負あり！ ゲームが終了しました。";
             } else {
-                msg = (data.winner === currentUserId) ? "あなたの勝ちです！" : "あなたの負けです...";
+                if(data.winner === currentUserId) {
+                    msg = "おめでとうございます！\nあなたの勝ちです！";
+                    title = "勝利！";
+                } else {
+                    msg = "残念...\nあなたの負けです。";
+                    title = "敗北";
+                }
             }
             
             setTimeout(() => {
-                alert(msg);
-                backToLobby();
-            }, 100);
+                showModal(msg, title, () => {
+                    backToLobby();
+                });
+            }, 300);
         });
     }
 
@@ -333,25 +497,6 @@
         document.getElementById('game-screen').classList.remove('hidden');
     }
     
-    function backToLobby() {
-        document.getElementById('game-screen').classList.add('hidden');
-        document.getElementById('lobby-screen').classList.remove('hidden');
-        document.getElementById('board').innerHTML = '';
-        
-        isSpectator = false; // フラグリセット
-        currentRoom = null;
-        
-        // ソケット通信で部屋から退出
-        if (socket) {
-            socket.emit('back_to_lobby', {room_id: currentRoom}); 
-            // ※currentRoomは直前でnullにしてしまうと送れないので注意が必要ですが、
-            // サーバー側でsidベースで処理していれば問題ありません。
-            // 今回のサーバー実装では data.room_id を見て leave_room するので、
-            // 正しくは変数をクリアする前にemitする必要があります。
-            // ↓ 修正後のフロー
-        }
-    }
-    // 上記の backToLobby の修正版
     function backToLobby() {
         if (socket && currentRoom) {
             socket.emit('back_to_lobby', {room_id: currentRoom});
@@ -381,8 +526,7 @@
     }
 
     function clickCell(r, c) {
-        if(!currentRoom) return;
-        if(isSpectator) return; // 【追加】観戦者は操作不可
+        if(!currentRoom || isSpectator) return;
         socket.emit('place_stone', {room_id: currentRoom, row: r, col: c});
     }
 
@@ -396,42 +540,16 @@
     }
     
     function updateTurn(activeUserOrColor) {
-        // activeUserOrColor: 対戦中はUser ID (game_start時) や 次の手番User ID が来ることもあるが
-        // 今回の spectate_start では 'current_turn' (UserID) が来る
-        // update_board では next_turn (UserID) が来る
-        // game_start時のみ myRoleColor 設定のために 1 or 2 を使っていたが
-        // サーバー実装の update_board は next_turn (UserID) を返している。
-        
-        // サーバーの update_board 実装再確認:
-        // emit('update_board', { ..., 'next_turn': next_turn }) -> next_turnはUserID
-        // フロントの update_board 実装:
-        // const nextTurnColor = (data.color === 1) ? 2 : 1; -> 色番号(1 or 2)を渡している
-        // なので引数は「色番号(1 or 2)」または「UserID」が混在する可能性があるため整理が必要です。
-        
-        // 今回のフロントエンド実装では、update_board内で「置かれた石の色」から「次の色」を計算して渡しているので
-        // 引数は常に「色番号(1:黒, 2:白)」です。
-        // spectate_start の時は UserID が来るため、変換が必要です。
-        
         const indicator = document.getElementById('turn-indicator');
         
-        let activeColor = activeUserOrColor;
-        
-        // もしUserIDが渡ってきた場合（観戦開始時など）、色番号に変換できないと表示が崩れる。
-        // 簡易対応として、spectate_start で current_turn ではなく
-        // 「盤面から次の手番を推測する」か、サーバーから「次の手番の色」を送るのが確実です。
-        // ここでは update_board と同様のロジックで動くように、
-        // Spectator開始時は便宜上 1 (黒) か、盤面の石の数から判断するロジックを入れても良いですが
-        // 一旦「ゲーム進行中」表示にします。
-
-        // 観戦モードの場合の表示
         if (isSpectator) {
              indicator.innerText = "観戦中 (プレイヤーが思考中...)";
              indicator.className = 'spectator-view';
              return;
         }
 
-        const isMyTurn = (activeColor === myRoleColor);
-        const colorName = (activeColor === 1) ? "黒" : "白";
+        const isMyTurn = (activeUserOrColor === myRoleColor);
+        const colorName = (activeUserOrColor === 1) ? "黒" : "白";
         
         if (isMyTurn) {
             indicator.innerText = `あなたの番です (${colorName})`;

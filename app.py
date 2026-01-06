@@ -1,10 +1,12 @@
 import os
+import random  # 【追加】ランダム用
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 app = Flask(__name__)
 # 本番環境ではランダムな文字列に変更してください
@@ -12,12 +14,14 @@ app.config['SECRET_KEY'] = 'secret_key_change_this_in_production'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///gomoku.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# --- SSL化に伴うセキュリティ設定 (HTTPS運用時) ---
+# HTTPS運用時のセキュリティ設定
 app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
-# WebSocket設定
+# Nginx経由のHTTPS情報を正しく解釈させる設定
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
+
 socketio = SocketIO(app, async_mode='eventlet')
 db = SQLAlchemy(app)
 login_manager = LoginManager()
@@ -31,7 +35,6 @@ class User(UserMixin, db.Model):
     password = db.Column(db.String(200), nullable=False)
     nickname = db.Column(db.String(100), nullable=False)
 
-# 対戦履歴テーブル
 class GameResult(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     timestamp = db.Column(db.DateTime, default=datetime.now)
@@ -44,17 +47,8 @@ class GameResult(db.Model):
     winner = db.relationship('User', foreign_keys=[winner_id])
 
 # --- 状態管理 (メモリ上) ---
-connected_users = {} # {socket_id: user_id}
+connected_users = {} 
 games = {} 
-# games構造: 
-# { 
-#   room_id: {
-#       'black': user_id, 
-#       'white': user_id, 
-#       'board': [[0]*15...], 
-#       'turn': user_id
-#   } 
-# }
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -118,10 +112,45 @@ def get_history():
 
 @socketio.on('connect')
 def handle_connect():
+    print(f"Connect Request: SID={request.sid}, Auth={current_user.is_authenticated}")
+    
     if current_user.is_authenticated:
         connected_users[request.sid] = current_user.id
-        join_room('lobby')
-        emit_user_list()
+        
+        # 進行中のゲームがあるか探す
+        ongoing_game_id = None
+        my_role = None
+        opponent_name = "Unknown"
+        
+        for rid, game in games.items():
+            if game['black'] == current_user.id:
+                ongoing_game_id = rid
+                my_role = 'black'
+                opp_user = User.query.get(game['white'])
+                if opp_user: opponent_name = opp_user.nickname
+                break
+            elif game['white'] == current_user.id:
+                ongoing_game_id = rid
+                my_role = 'white'
+                opp_user = User.query.get(game['black'])
+                if opp_user: opponent_name = opp_user.nickname
+                break
+        
+        if ongoing_game_id:
+            join_room(ongoing_game_id)
+            game_data = games[ongoing_game_id]
+            
+            emit('reconnect_game', {
+                'room_id': ongoing_game_id,
+                'role': my_role,
+                'opponent': opponent_name,
+                'board': game_data['board'],
+                'current_turn': game_data['turn']
+            })
+            emit_user_list()
+        else:
+            join_room('lobby')
+            emit_user_list()
 
 @socketio.on('disconnect')
 def handle_disconnect():
@@ -129,23 +158,24 @@ def handle_disconnect():
         del connected_users[request.sid]
         emit_user_list()
 
-# 【修正】ユーザーリスト送信時にステータス(対戦中かどうか)を含める
 def emit_user_list():
-    # 現在対戦中のユーザーIDと部屋IDのマッピングを作成
-    playing_users = {}
+    playing_map = {}
     for rid, game in games.items():
-        playing_users[game['black']] = rid
-        playing_users[game['white']] = rid
+        playing_map[game['black']] = rid
+        playing_map[game['white']] = rid
 
     active_users = []
     seen_ids = set()
-    for sid, uid in connected_users.items():
+    current_connections = connected_users.copy()
+    
+    for sid, uid in current_connections.items():
         if uid not in seen_ids:
             u = User.query.get(uid)
             if u:
-                status = 'playing' if uid in playing_users else 'free'
-                room_id = playing_users.get(uid) # 対戦中なら部屋ID
-                
+                is_playing = uid in playing_map
+                status = 'playing' if is_playing else 'free'
+                room_id = playing_map.get(uid) 
+
                 active_users.append({
                     'id': u.id, 
                     'nickname': u.nickname,
@@ -185,20 +215,38 @@ def handle_challenge_response(data):
             break
             
     if accepted and challenger_sid:
+        # 部屋IDの作成
         room_id = f"game_{min(current_user.id, challenger_id)}_{max(current_user.id, challenger_id)}"
         
+        # 【修正】先手・後手をランダムに決定
+        # random.choice で True/False を決め、Trueなら挑戦者が黒(先手)
+        is_challenger_black = random.choice([True, False])
+        
+        if is_challenger_black:
+            black_id = challenger_id
+            white_id = current_user.id
+            challenger_role = 'black'
+            opponent_role = 'white'
+        else:
+            black_id = current_user.id
+            white_id = challenger_id
+            challenger_role = 'white'
+            opponent_role = 'black'
+
         games[room_id] = {
-            'black': challenger_id,
-            'white': current_user.id,
+            'black': black_id,
+            'white': white_id,
             'board': [[0]*15 for _ in range(15)],
-            'turn': challenger_id
+            'turn': black_id # 五目並べは常に黒が先手
         }
         
-        # プレイヤーに対戦開始通知
-        emit('game_start', {'room_id': room_id, 'opponent': current_user.nickname, 'role': 'black'}, room=challenger_sid)
-        emit('game_start', {'room_id': room_id, 'opponent': User.query.get(challenger_id).nickname, 'role': 'white'}, room=opponent_sid)
+        # 各プレイヤーに通知
+        # challenger_sid (申し込んだ人) には自分のロールを通知
+        emit('game_start', {'room_id': room_id, 'opponent': current_user.nickname, 'role': challenger_role}, room=challenger_sid)
         
-        # ロビーのステータス更新のためにリスト再送信
+        # opponent_sid (申し込まれた人=current_user) には自分のロールを通知
+        emit('game_start', {'room_id': room_id, 'opponent': User.query.get(challenger_id).nickname, 'role': opponent_role}, room=opponent_sid)
+        
         emit_user_list()
         
     elif challenger_sid:
@@ -210,7 +258,6 @@ def handle_join_game(data):
     join_room(room)
     leave_room('lobby')
 
-# 【追加】観戦リクエスト処理
 @socketio.on('join_spectate')
 def handle_join_spectate(data):
     room_id = data['room_id']
@@ -223,7 +270,6 @@ def handle_join_spectate(data):
         black_user = User.query.get(game['black'])
         white_user = User.query.get(game['white'])
         
-        # 観戦者用の初期データ送信 (現在の盤面含む)
         emit('spectate_start', {
             'room_id': room_id,
             'black_name': black_user.nickname,
@@ -253,7 +299,6 @@ def handle_place_stone(data):
     if not game:
         return
     
-    # 観戦者や手番以外のプレイヤーによる操作を防止
     if game['turn'] != user_id:
         return 
         
@@ -268,7 +313,6 @@ def handle_place_stone(data):
     next_turn = game['white'] if game['turn'] == game['black'] else game['black']
     game['turn'] = next_turn
     
-    # 観戦者を含む部屋全体に通知
     emit('update_board', {
         'row': row, 'col': col, 'color': stone_val, 'next_turn': next_turn
     }, room=room_id)
@@ -276,10 +320,11 @@ def handle_place_stone(data):
     if winner:
         record_game_result(game['black'], game['white'], user_id)
         emit('game_over', {'winner': user_id}, room=room_id)
+        
         if room_id in games:
             del games[room_id]
-            # ゲーム終了時、ロビーのステータス更新はクライアントがロビーに戻ったタイミングで行われるが
-            # ここでも念のためemit_user_listを呼んでも良い（ただしbroadcastには工夫が必要なので今回は省略）
+        
+        emit_user_list()
 
 def record_game_result(black_id, white_id, winner_id):
     try:
