@@ -31,3 +31,15 @@
     -現在、申し込んだ側が自動的に先手になってしまう状態なので、先手・後手はランダムで決定してください。
     -対戦中にリロードしてしまうと、ゲーム中にもかかわらず、ロビーに強制的に戻されてしまいます。ゲームが継続するように修正してください。
     -通知時window.alertを使用するのをやめ、HTMLのポップアップ表示に修正してください。
+## 構築
+    cd ~/git
+    git clone git@github.com:supilog/gomoku.git
+    mkdir -p /usr/local/nginx/vhosts/gomoku.supisupi.com/{htdocs,logs}
+
+    cd /usr/local/nginx/vhosts/gomoku.supisupi.com/htdocs
+    cp -ri ~/git/gomoku/app.py ./
+    cp -ri ~/git/gomoku/templates ./
+    cp -ri ~/git/gomoku/requirements.txt ./
+    python3 -m venv venv
+    source venv/bin/activate
+    pip install -r requirements.txt
