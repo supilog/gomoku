@@ -9,13 +9,14 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 app = Flask(__name__)
-# 本番環境ではランダムな文字列に変更してください
-app.config['SECRET_KEY'] = 'secret_key_change_this_in_production'
+# 本番では必ず環境変数 SECRET_KEY を設定すること（例: openssl rand -hex 32）
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('SQLALCHEMY_DATABASE_URI', 'sqlite:///gomoku.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# HTTPS運用時のセキュリティ設定
-app.config['SESSION_COOKIE_SECURE'] = True
+# 本番（HTTPS）時のみ Secure Cookie を有効化（開発時は HTTP のため False）
+_is_production = os.environ.get('FLASK_ENV') == 'production'
+app.config['SESSION_COOKIE_SECURE'] = _is_production
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 

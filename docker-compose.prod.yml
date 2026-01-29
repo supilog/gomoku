@@ -1,0 +1,17 @@
+# 本番用 Docker Compose
+# 使い方: docker compose -f docker-compose.prod.yml --env-file .env up -d
+version: "3.8"
+
+services:
+  gomoku:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "5003:5003"
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env
+    environment:
+      - FLASK_ENV=production
+    # 本番では .env で SQLALCHEMY_DATABASE_URI 等を上書き可能

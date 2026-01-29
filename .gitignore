@@ -1,2 +1,5 @@
 # Docker バインドマウント用（DB ファイルを含む）
 data/
+
+# 本番用の秘密情報（env.example をコピーして .env を作成する）
+.env
