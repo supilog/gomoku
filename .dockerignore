@@ -1,0 +1,24 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.env
+.venv
+venv
+ENV
+
+# IDE / エディタ
+.idea
+.vscode
+*.swp
+*.swo
+
+# その他
+*.md
+.DS_Store

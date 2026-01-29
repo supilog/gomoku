@@ -11,7 +11,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 app = Flask(__name__)
 # 本番環境ではランダムな文字列に変更してください
 app.config['SECRET_KEY'] = 'secret_key_change_this_in_production'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///gomoku.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('SQLALCHEMY_DATABASE_URI', 'sqlite:///gomoku.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # HTTPS運用時のセキュリティ設定

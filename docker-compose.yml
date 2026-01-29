@@ -1,0 +1,13 @@
+version: "3.8"
+
+services:
+  gomoku:
+    build: .
+    ports:
+      - "5003:5003"
+    volumes:
+      # SQLite DB を永続化（プロジェクト直下の data に保存、サイドバーで確認可能）
+      - ./data:/app/data
+    environment:
+      - FLASK_ENV=production
+      - SQLALCHEMY_DATABASE_URI=sqlite:////app/data/gomoku.db
